@@ -13,10 +13,9 @@ const subnet6 = "fe90::1/16"
 
 // Server Server context
 type Server struct {
-	tun    *tun.Device
-	net    *nat.Net
-	net6   *nat.Net
-	cipher core.Cipher
+	tun  *tun.Device
+	net  *nat.Net
+	net6 *nat.Net
 }
 
 // handleConnection handles a connection between FleeGrid client and server
@@ -56,19 +55,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 			} else {
 				subnet = s.net6
 			}
-			// take a virtual IP
-			vip, err = subnet.Take()
-			if err != nil {
-				log.Printf("cannot assign IP: %v: %v\n", name, err)
-				break
-			}
-			log.Printf("virtual IP assigned: %v: %v\n", name, vip.String())
 			// record orignal IP
 			oip, err = ipp.GetIP(nat.SourceIP)
 			if err != nil {
 				log.Printf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
 			}
+			// take a virtual IP
+			vip, err = subnet.Take()
+			if err != nil {
+				log.Printf("cannot assign IP: %v: %v\n", name, err)
+				break
+			}
+			log.Printf("virtual IP assigned: %v: %v --> %v\n", name, oip.String(), vip.String())
 			// rewrite IP
 			err = ipp.SetIP(nat.SourceIP, vip)
 			if err != nil {
@@ -93,7 +92,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 				break
 			}
 		}
-		log.Printf("version: %v\n", ipp.Version())
+		src, _ := ipp.GetIP(nat.SourceIP)
+		dst, _ := ipp.GetIP(nat.DestinationIP)
+		log.Printf("IPPacket read: Version:%v, Length:%v, Source:%v, Destination:%v", ipp.Version(), len(ipp), src.String(), dst.String())
 	}
 }
 
@@ -124,10 +125,9 @@ func startServer(config *core.Config) {
 
 	// create server context
 	server := &Server{
-		tun:    device,
-		net:    mnet,
-		net6:   mnet6,
-		cipher: cp,
+		tun:  device,
+		net:  mnet,
+		net6: mnet6,
 	}
 
 	// listen
