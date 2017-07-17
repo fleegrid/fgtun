@@ -32,15 +32,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 	var vip net.IP
 	// original ip
 	var oip net.IP
-	isv6 := false
+	// subnet
+	var subnet *nat.Net
 
+	// defer to remove virtual IP
 	defer func() {
-		if vip != nil {
-			if isv6 {
-				s.net6.Remove(vip)
-			} else {
-				s.net.Remove(vip)
-			}
+		if vip != nil && subnet != nil {
+			subnet.Remove(vip)
 		}
 	}()
 
@@ -52,16 +50,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		// virtual ip not assigned
 		if vip == nil {
-			// take a virtual IP
+			// determine subnet
 			if ipp.Version() == 4 {
-				vip, err = s.net.Take()
+				subnet = s.net
 			} else {
-				vip, err = s.net6.Take()
+				subnet = s.net6
 			}
+			// take a virtual IP
+			vip, err = subnet.Take()
 			if err != nil {
 				log.Printf("cannot assign IP: %v: %v\n", name, err)
 				break
 			}
+			log.Printf("virtual IP assigned: %v: %v\n", name, vip.String())
 			// record orignal IP
 			oip, err = ipp.GetIP(nat.SourceIP)
 			if err != nil {
@@ -137,16 +138,17 @@ func startServer(config *core.Config) {
 	log.Printf("listening on: %v\n", config.Address)
 	// accept
 	for {
-		c, err := l.Accept()
+		conn, err := l.Accept()
 
 		if err != nil {
 			log.Fatalf("failed to accept: %v\n", err)
 			break
 		}
 
-		// cipher wrapped connection
-		conn := core.NewStreamConn(c, cp)
 		log.Printf("new connection: %v\n", conn.RemoteAddr().String())
+
+		// cipher wrapped connection
+		conn = core.NewStreamConn(conn, cp)
 
 		// handle connection
 		go server.handleConnection(conn)
