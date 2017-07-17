@@ -37,6 +37,7 @@ func startClient(config *core.Config) {
 	if err != nil {
 		log.Fatalf("cannot connect to server: %v\n", config.Address)
 	}
+	log.Printf("server connected: %v\n", conn.RemoteAddr().String())
 
 	// cipher wrapped
 	conn = core.NewStreamConn(conn, cp)
@@ -44,19 +45,29 @@ func startClient(config *core.Config) {
 	buf := make(nat.IPPacket, 64*1024)
 
 	for {
-		// read TUN
+		// read TUN to a large buffer
 		l, err := device.Read(buf)
 		if err != nil {
 			log.Printf("failed to read IPPacket from TUN device: %v\n", err)
 			break
 		}
-		ipp := buf[4 : l-4]
+		// skip TUN PI head
+		ipp := buf[4:l]
 		log.Printf("IPPacket:% x\n", ipp)
+		// check IPPacket.Length()
+		if pl, _ := ipp.Length(); pl != len(ipp) {
+			log.Printf("IPPacket Lenght() mismatch: %v\n", pl)
+			break
+		}
+		// log
 		src, _ := ipp.GetIP(nat.SourceIP)
 		dst, _ := ipp.GetIP(nat.DestinationIP)
 		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// write
-		conn.Write(ipp)
+		if _, err = conn.Write(ipp); err != nil {
+			log.Printf("failed to send IPPacket to server: %v: %v\n", conn.RemoteAddr().String(), err)
+			break
+		}
 	}
 }
