@@ -1,4 +1,4 @@
-package fgtun
+package main
 
 import "testing"
 
