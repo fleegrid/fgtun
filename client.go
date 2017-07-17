@@ -4,14 +4,13 @@ import (
 	"github.com/fleegrid/core"
 	"github.com/fleegrid/nat"
 	"github.com/fleegrid/tun"
-	"io"
 	"log"
-	//"net"
+	"net"
 )
 
 func startClient(config *core.Config) {
 	// create cipher
-	_, err := core.NewCipher(config.Cipher, config.Passwd)
+	cp, err := core.NewCipher(config.Cipher, config.Passwd)
 	if err != nil {
 		log.Fatalf("failed to initializae cipher %v: %v\n", config.Cipher, err)
 	}
@@ -34,35 +33,30 @@ func startClient(config *core.Config) {
 	}
 	log.Printf("managed network created: %v --> %v\n", mnet6.String(), mnet6.GatewayIP.String())
 	// dial
-	/*
-		conn, err := net.Dial("tcp", config.Address)
-		if err != nil {
-			log.Fatalf("cannot connect to server: %v\n", config.Address)
-		}
-	*/
+	conn, err := net.Dial("tcp", config.Address)
+	if err != nil {
+		log.Fatalf("cannot connect to server: %v\n", config.Address)
+	}
 
 	// cipher wrapped
-	//conn = core.NewStreamConn(conn, cp)
+	conn = core.NewStreamConn(conn, cp)
 
-	pinfo := make([]byte, 4)
+	buf := make(nat.IPPacket, 64*1024)
 
 	for {
-		// read and drop TUN_PI
-		if _, err := io.ReadFull(device, pinfo); err != nil {
-			log.Printf("failed to drop TUN_PI: %v\n", err)
-			break
-		}
 		// read TUN
-		ipp, err := nat.ReadIPPacket(device)
+		l, err := device.Read(buf)
 		if err != nil {
 			log.Printf("failed to read IPPacket from TUN device: %v\n", err)
 			break
 		}
+		ipp := buf[4 : l-4]
 		log.Printf("IPPacket:% x\n", ipp)
 		src, _ := ipp.GetIP(nat.SourceIP)
 		dst, _ := ipp.GetIP(nat.DestinationIP)
 		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", ipp.Version(), len(ipp), src.String(), dst.String())
+
 		// write
-		//conn.Write(ipp)
+		conn.Write(ipp)
 	}
 }
