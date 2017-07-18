@@ -44,7 +44,11 @@ func main() {
 		showHelp()
 	} else if clientMode {
 		log.Printf("fgtun v%v, FleeGrid as TUN device\n", Version)
-		if err := startClient(config); err != nil {
+		c, err := NewClient(config)
+		if err != nil {
+			log.Fatalf("failed to create client:%v\n", err)
+		}
+		if err := c.Run(); err != nil {
 			log.Fatalf("ERROR:%v\n", err)
 		}
 	} else if serverMode {
