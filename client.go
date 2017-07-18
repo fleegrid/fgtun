@@ -48,15 +48,16 @@ func startClient(config *core.Config) (err error) {
 				log.Printf("Failed to read a IPPacket from server: %v\n", conn.RemoteAddr().String())
 				break
 			}
-			// detect proto
-			var proto byte
+			// build TUNPacket
+			tp := make(pkt.TUNPacket, len(ipp)+4)
 			if ipp.Version() == 4 {
-				proto = syscall.AF_INET
+				tp.SetProto(syscall.AF_INET)
 			} else {
-				proto = syscall.AF_INET6
+				tp.SetProto(syscall.AF_INET6)
 			}
+			tp.CopyPayload(ipp)
 			// write a IPPacket once a time
-			if _, err := device.Write(append([]byte{0, 0, 0, proto}, ipp...)); err != nil {
+			if _, err := device.Write(tp); err != nil {
 				log.Printf("Failed to write a IPPacket to TUN device: %v\n", device.Name())
 				break
 			}
