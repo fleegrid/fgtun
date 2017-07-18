@@ -38,6 +38,12 @@ func startClient(config *core.Config) (err error) {
 	// wrap net.Conn with cipher
 	conn = core.NewStreamConn(conn, cf)
 
+	// setup TUN device
+	if err = setupClientTUN(d.Name()); err != nil {
+		log.Println("failed to setup TUN device")
+		return
+	}
+
 	// write loop
 	go func() {
 		for {
