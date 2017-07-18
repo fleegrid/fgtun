@@ -57,7 +57,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				subnet = s.net6
 			}
 			// record orignal IP
-			oip, err = ipp.GetIP(pkt.SourceIP)
+			oip, err = ipp.IP(pkt.SourceIP)
 			if err != nil {
 				log.Printf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
@@ -77,7 +77,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 		} else {
 			// check source IP
-			noip, err := ipp.GetIP(pkt.SourceIP)
+			noip, err := ipp.IP(pkt.SourceIP)
 			if err != nil {
 				log.Printf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
@@ -93,8 +93,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 				break
 			}
 		}
-		src, _ := ipp.GetIP(pkt.SourceIP)
-		dst, _ := ipp.GetIP(pkt.DestinationIP)
+		src, _ := ipp.IP(pkt.SourceIP)
+		dst, _ := ipp.IP(pkt.DestinationIP)
 		log.Printf("IPPacket read: Version:%v, Length:%v, Source:%v, Destination:%v", ipp.Version(), len(ipp), src.String(), dst.String())
 	}
 }

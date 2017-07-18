@@ -1,8 +1,8 @@
 package main
 
 import (
+	"errors"
 	"github.com/fleegrid/core"
-	"github.com/fleegrid/nat"
 	"github.com/fleegrid/pkt"
 	"github.com/fleegrid/tun"
 	"log"
@@ -10,52 +10,45 @@ import (
 	"syscall"
 )
 
-func startClient(config *core.Config) {
+func startClient(config *core.Config) (err error) {
 	// create cipher
-	cp, err := core.NewCipher(config.Cipher, config.Passwd)
-	if err != nil {
-		log.Fatalf("failed to initializae cipher %v: %v\n", config.Cipher, err)
+	var cp core.Cipher
+	if cp, err = core.NewCipher(config.Cipher, config.Passwd); err != nil {
+		log.Println("failed to initialize cipher")
+		return
 	}
 	log.Printf("using cipher: %v\n", config.Cipher)
+
 	// create TUN
-	device, err := tun.NewDevice()
-	if err != nil {
-		log.Fatalf("failed to create TUN device: %v\n", err)
+	var device *tun.Device
+	if device, err = tun.NewDevice(); err != nil {
+		log.Println("failed to create TUN device")
+		return
 	}
 	log.Printf("TUN device created: %v\n", device.Name())
-	// create virtual subnet
-	mnet, err := nat.NewNetFromCIDR(subnet)
-	if err != nil {
-		log.Fatalf("failed to create managed net: %v\n", err)
-	}
-	log.Printf("managed network created: %v --> %v\n", mnet.String(), mnet.GatewayIP.String())
-	mnet6, err := nat.NewNetFromCIDR(subnet6)
-	if err != nil {
-		log.Fatalf("failed to create managed net: %v\n", err)
-	}
-	log.Printf("managed network created: %v --> %v\n", mnet6.String(), mnet6.GatewayIP.String())
+
 	// dial
-	conn, err := net.Dial("tcp", config.Address)
-	if err != nil {
-		log.Fatalf("cannot connect to server: %v\n", config.Address)
+	var conn net.Conn
+	if conn, err = net.Dial("tcp", config.Address); err != nil {
+		log.Println("failed to connect server")
+		return
 	}
 	log.Printf("server connected: %v\n", conn.RemoteAddr().String())
 
-	// cipher wrapped
+	// wrap net.Conn with cipher
 	conn = core.NewStreamConn(conn, cp)
-
-	// a large buffer
-	buf := make(pkt.IPPacket, 64*1024)
 
 	// write loop
 	go func() {
 		for {
+			var err error
 			// read a IPPacket from server
-			ipp, err := pkt.ReadIPPacket(conn)
-			if err != nil {
+			var ipp pkt.IPPacket
+			if ipp, err = pkt.ReadIPPacket(conn); err != nil {
 				log.Printf("Failed to read a IPPacket from server: %v\n", conn.RemoteAddr().String())
 				break
 			}
+			// detect proto
 			var proto byte
 			if ipp.Version() == 4 {
 				proto = syscall.AF_INET
@@ -70,25 +63,46 @@ func startClient(config *core.Config) {
 		}
 	}()
 
+	// large buffer
+	buf := make([]byte, 64*1024)
+
 	// read loop
 	for {
-		// read TUN to a large buffer
-		l, err := device.Read(buf)
-		if err != nil {
-			log.Printf("failed to read IPPacket from TUN device: %v\n", err)
+		// read to buffer
+		var l int
+		if l, err = device.Read(buf); err != nil {
+			log.Println("failed to read bytes from TUN device")
 			break
 		}
-		// skip TUN PI head
-		ipp := buf[4:l]
-		log.Printf("IPPacket:% x\n", ipp)
+
+		// wrap bytes with TUNPacket
+		tp := pkt.TUNPacket(buf[:l])
+
+		// extract payload
+		var b []byte
+		if b, err = tp.Payload(); err != nil {
+			log.Println("failed to extract payload from TUN device")
+			break
+		}
+
+		// create IPPacket
+		ipp := pkt.IPPacket(b)
+
 		// check IPPacket.Length()
-		if pl, _ := ipp.Length(); pl != len(ipp) {
-			log.Printf("IPPacket Lenght() mismatch: %v\n", pl)
+		var pl int
+		if pl, err = ipp.Length(); err != nil {
+			log.Println("failed to get IPPacket length")
 			break
 		}
+		if pl != len(ipp) {
+			log.Println("IPPacket length mismatch")
+			err = errors.New("IPPacket length mismatch")
+			break
+		}
+
 		// log
-		src, _ := ipp.GetIP(pkt.SourceIP)
-		dst, _ := ipp.GetIP(pkt.DestinationIP)
+		src, _ := ipp.IP(pkt.SourceIP)
+		dst, _ := ipp.IP(pkt.DestinationIP)
 		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// write
@@ -97,4 +111,5 @@ func startClient(config *core.Config) {
 			break
 		}
 	}
+	return
 }

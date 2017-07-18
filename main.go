@@ -44,7 +44,9 @@ func main() {
 		showHelp()
 	} else if clientMode {
 		log.Printf("fgtun v%v, FleeGrid as TUN device\n", Version)
-		startClient(config)
+		if err := startClient(config); err != nil {
+			log.Fatalf("ERROR:%v\n", err)
+		}
 	} else if serverMode {
 		log.Printf("fgtun v%v, FleeGrid as TUN device\n", Version)
 		startServer(config)
