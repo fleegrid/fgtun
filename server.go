@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/fleegrid/core"
 	"github.com/fleegrid/nat"
+	"github.com/fleegrid/pkt"
 	"github.com/fleegrid/tun"
 	"log"
 	"net"
@@ -42,7 +43,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}()
 
 	for {
-		ipp, err := nat.ReadIPPacket(conn)
+		ipp, err := pkt.ReadIPPacket(conn)
 		if err != nil {
 			log.Printf("failed to read a IPPacket: %v: %v\n", name, err)
 			break
@@ -56,7 +57,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				subnet = s.net6
 			}
 			// record orignal IP
-			oip, err = ipp.GetIP(nat.SourceIP)
+			oip, err = ipp.GetIP(pkt.SourceIP)
 			if err != nil {
 				log.Printf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
@@ -69,14 +70,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			log.Printf("virtual IP assigned: %v: %v --> %v\n", name, oip.String(), vip.String())
 			// rewrite IP
-			err = ipp.SetIP(nat.SourceIP, vip)
+			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
 				log.Printf("cannot rewrite source IP: %v: %v\n", name, err)
 				break
 			}
 		} else {
 			// check source IP
-			noip, err := ipp.GetIP(nat.SourceIP)
+			noip, err := ipp.GetIP(pkt.SourceIP)
 			if err != nil {
 				log.Printf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
@@ -86,14 +87,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 				break
 			}
 			// rewrite IP
-			err = ipp.SetIP(nat.SourceIP, vip)
+			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
 				log.Printf("cannot rewrite source IP: %v: %v\n", name, err)
 				break
 			}
 		}
-		src, _ := ipp.GetIP(nat.SourceIP)
-		dst, _ := ipp.GetIP(nat.DestinationIP)
+		src, _ := ipp.GetIP(pkt.SourceIP)
+		dst, _ := ipp.GetIP(pkt.DestinationIP)
 		log.Printf("IPPacket read: Version:%v, Length:%v, Source:%v, Destination:%v", ipp.Version(), len(ipp), src.String(), dst.String())
 	}
 }

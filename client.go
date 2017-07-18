@@ -3,9 +3,11 @@ package main
 import (
 	"github.com/fleegrid/core"
 	"github.com/fleegrid/nat"
+	"github.com/fleegrid/pkt"
 	"github.com/fleegrid/tun"
 	"log"
 	"net"
+	"syscall"
 )
 
 func startClient(config *core.Config) {
@@ -42,8 +44,33 @@ func startClient(config *core.Config) {
 	// cipher wrapped
 	conn = core.NewStreamConn(conn, cp)
 
-	buf := make(nat.IPPacket, 64*1024)
+	// a large buffer
+	buf := make(pkt.IPPacket, 64*1024)
 
+	// write loop
+	go func() {
+		for {
+			// read a IPPacket from server
+			ipp, err := pkt.ReadIPPacket(conn)
+			if err != nil {
+				log.Printf("Failed to read a IPPacket from server: %v\n", conn.RemoteAddr().String())
+				break
+			}
+			var proto byte
+			if ipp.Version() == 4 {
+				proto = syscall.AF_INET
+			} else {
+				proto = syscall.AF_INET6
+			}
+			// write a IPPacket once a time
+			if _, err := device.Write(append([]byte{0, 0, 0, proto}, ipp...)); err != nil {
+				log.Printf("Failed to write a IPPacket to TUN device: %v\n", device.Name())
+				break
+			}
+		}
+	}()
+
+	// read loop
 	for {
 		// read TUN to a large buffer
 		l, err := device.Read(buf)
@@ -60,8 +87,8 @@ func startClient(config *core.Config) {
 			break
 		}
 		// log
-		src, _ := ipp.GetIP(nat.SourceIP)
-		dst, _ := ipp.GetIP(nat.DestinationIP)
+		src, _ := ipp.GetIP(pkt.SourceIP)
+		dst, _ := ipp.GetIP(pkt.DestinationIP)
 		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// write
