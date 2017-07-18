@@ -12,20 +12,20 @@ import (
 
 func startClient(config *core.Config) (err error) {
 	// create cipher
-	var cp core.Cipher
-	if cp, err = core.NewCipher(config.Cipher, config.Passwd); err != nil {
+	var cf core.Cipher
+	if cf, err = core.NewCipher(config.Cipher, config.Passwd); err != nil {
 		log.Println("failed to initialize cipher")
 		return
 	}
 	log.Printf("using cipher: %v\n", config.Cipher)
 
 	// create TUN
-	var device *tun.Device
-	if device, err = tun.NewDevice(); err != nil {
+	var d *tun.Device
+	if d, err = tun.NewDevice(); err != nil {
 		log.Println("failed to create TUN device")
 		return
 	}
-	log.Printf("TUN device created: %v\n", device.Name())
+	log.Printf("TUN device created: %v\n", d.Name())
 
 	// dial
 	var conn net.Conn
@@ -36,29 +36,29 @@ func startClient(config *core.Config) (err error) {
 	log.Printf("server connected: %v\n", conn.RemoteAddr().String())
 
 	// wrap net.Conn with cipher
-	conn = core.NewStreamConn(conn, cp)
+	conn = core.NewStreamConn(conn, cf)
 
 	// write loop
 	go func() {
 		for {
 			var err error
 			// read a IPPacket from server
-			var ipp pkt.IPPacket
-			if ipp, err = pkt.ReadIPPacket(conn); err != nil {
+			var p pkt.IPPacket
+			if p, err = pkt.ReadIPPacket(conn); err != nil {
 				log.Printf("Failed to read a IPPacket from server: %v\n", conn.RemoteAddr().String())
 				break
 			}
 			// build TUNPacket
-			tp := make(pkt.TUNPacket, len(ipp)+4)
-			if ipp.Version() == 4 {
+			tp := make(pkt.TUNPacket, len(p)+4)
+			if p.Version() == 4 {
 				tp.SetProto(syscall.AF_INET)
 			} else {
 				tp.SetProto(syscall.AF_INET6)
 			}
-			tp.CopyPayload(ipp)
+			tp.CopyPayload(p)
 			// write a IPPacket once a time
-			if _, err := device.Write(tp); err != nil {
-				log.Printf("Failed to write a IPPacket to TUN device: %v\n", device.Name())
+			if _, err := d.Write(tp); err != nil {
+				log.Printf("Failed to write a IPPacket to TUN device: %v\n", d.Name())
 				break
 			}
 		}
@@ -71,7 +71,7 @@ func startClient(config *core.Config) (err error) {
 	for {
 		// read to buffer
 		var l int
-		if l, err = device.Read(buf); err != nil {
+		if l, err = d.Read(buf); err != nil {
 			log.Println("failed to read bytes from TUN device")
 			break
 		}
@@ -87,27 +87,27 @@ func startClient(config *core.Config) (err error) {
 		}
 
 		// create IPPacket
-		ipp := pkt.IPPacket(b)
+		p := pkt.IPPacket(b)
 
 		// check IPPacket.Length()
 		var pl int
-		if pl, err = ipp.Length(); err != nil {
+		if pl, err = p.Length(); err != nil {
 			log.Println("failed to get IPPacket length")
 			break
 		}
-		if pl != len(ipp) {
+		if pl != len(p) {
 			log.Println("IPPacket length mismatch")
 			err = errors.New("IPPacket length mismatch")
 			break
 		}
 
 		// log
-		src, _ := ipp.IP(pkt.SourceIP)
-		dst, _ := ipp.IP(pkt.DestinationIP)
-		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", ipp.Version(), len(ipp), src.String(), dst.String())
+		src, _ := p.IP(pkt.SourceIP)
+		dst, _ := p.IP(pkt.DestinationIP)
+		log.Printf("IPPacket read: Version: %v, Length: %v, Source: %v, Destination: %v", p.Version(), len(p), src.String(), dst.String())
 
 		// write
-		if _, err = conn.Write(ipp); err != nil {
+		if _, err = conn.Write(p); err != nil {
 			log.Printf("failed to send IPPacket to server: %v: %v\n", conn.RemoteAddr().String(), err)
 			break
 		}
