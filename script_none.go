@@ -2,30 +2,10 @@
 
 package main
 
-const clientSetupScript = `
-#!/bin/sh
+const clientSetupScript = ""
 
-set -e
-set -u
+const clientShutdownScript = ""
 
-ifconfig {{.DeviceName}} {{.LocalIP}} {{.RemoteIP}} mtu 1500 up > /dev/null
+const serverSetupScript = ""
 
-CURRENT_GATEWAY=$(route -n get default | grep gateway | cut -d ':' -f 2)
-
-route delete default > /dev/null
-
-route add default {{.RemoteIP}} > /dev/null
-
-echo $CURRENT_GATEWAY
-`
-
-const clientShutdownScript = `
-#!/bin/sh
-
-set -e
-set -u
-
-route delete default || true
-
-route add default {{.GatewayIP}}
-`
+const serverShutdownScript = ""

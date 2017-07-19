@@ -8,14 +8,17 @@ const clientSetupScript = `
 set -e
 set -u
 
-ifconfig {{.DeviceName}} {{.LocalIP}} {{.RemoteIP}} mtu 1500 up > /dev/null
+ifconfig {{.DeviceName}} {{.LocalIP}} {{.RemoteIP}} mtu 1500 up
 
 CURRENT_GATEWAY=$(route -n get default | grep gateway | cut -d ':' -f 2)
 
-route delete default > /dev/null
+route delete default
 
-route add default {{.RemoteIP}} > /dev/null
+route add default {{.RemoteIP}}
 
+# Trigger sh.ExtractResult()
+
+echo "------------"
 echo $CURRENT_GATEWAY
 `
 
@@ -29,3 +32,7 @@ route delete default || true
 
 route add default {{.GatewayIP}}
 `
+
+const serverSetupScript = ""
+
+const serverShutdownScript = ""

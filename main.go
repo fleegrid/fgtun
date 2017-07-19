@@ -86,3 +86,27 @@ func startClient(config *core.Config) {
 	// start
 	c.Run()
 }
+
+func startServer(config *core.Config) {
+	var s *Server
+	var err error
+
+	// create signal chan
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	// create client
+	if s, err = NewServer(config); err != nil {
+		os.Exit(1)
+		return
+	}
+
+	// capture signal to stop
+	go func() {
+		<-signalChan
+		s.Stop()
+	}()
+
+	// start
+	s.Run()
+}

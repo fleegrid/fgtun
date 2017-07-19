@@ -29,3 +29,7 @@ route delete default || true
 
 route add default {{.GatewayIP}}
 `
+
+const serverSetupScript = ""
+
+const serverShutdownScript = ""

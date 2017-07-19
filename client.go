@@ -7,7 +7,6 @@ import (
 	"github.com/fleegrid/sh"
 	"github.com/fleegrid/tun"
 	"net"
-	"strings"
 	"syscall"
 )
 
@@ -239,8 +238,10 @@ func (c *Client) setupTUN() (err error) {
 		"RemoteIP":   c.net.GatewayIP.String(),
 	})
 	if err == nil {
-		c.lastGateway = strings.TrimSpace(ret)
-		logf("tun: current gateway recorded: [%s]\n", c.lastGateway)
+		c.lastGateway = sh.ExtractResult(ret)
+		if len(c.lastGateway) > 0 {
+			logf("tun: current gateway saved: %s\n", c.lastGateway)
+		}
 	} else {
 		logln("tun: failed to setup:", ret)
 	}
