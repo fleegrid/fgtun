@@ -27,7 +27,7 @@ type Client struct {
 	stopping bool
 	done     chan bool
 
-	lastGatewayIP string
+	lastGateway string
 }
 
 // NewClient creates a new client with config
@@ -239,8 +239,8 @@ func (c *Client) setupTUN() (err error) {
 		"RemoteIP":   c.net.GatewayIP.String(),
 	})
 	if err == nil {
-		c.lastGatewayIP = strings.TrimSpace(ret)
-		logf("tun: current gateway recorded: [%s]\n", c.lastGatewayIP)
+		c.lastGateway = strings.TrimSpace(ret)
+		logf("tun: current gateway recorded: [%s]\n", c.lastGateway)
 	} else {
 		logln("tun: failed to setup:", ret)
 	}
@@ -249,14 +249,15 @@ func (c *Client) setupTUN() (err error) {
 
 func (c *Client) shutdownTUN() (err error) {
 	logln("tun: shutting down")
-	if len(c.lastGatewayIP) > 0 {
+	if len(c.lastGateway) > 0 {
 		var ret string
 		ret, err = sh.Run(clientShutdownScript, sh.Params{
-			"GatewayIP": c.lastGatewayIP,
+			"GatewayIP": c.lastGateway,
 		})
 		if err != nil {
 			logln("tun: failed to shutdown:", ret, err)
 		}
+		logln("tun: gateway recovered to:", c.lastGateway)
 	}
 	return
 }
