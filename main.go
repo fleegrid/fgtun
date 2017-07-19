@@ -6,6 +6,7 @@ import (
 	"github.com/fleegrid/core"
 	"log"
 	"os"
+	"os/signal"
 )
 
 var clientMode = false
@@ -44,13 +45,7 @@ func main() {
 		showHelp()
 	} else if clientMode {
 		log.Printf("fgtun v%v, FleeGrid as TUN device\n", Version)
-		c, err := NewClient(config)
-		if err != nil {
-			log.Fatalf("failed to create client:%v\n", err)
-		}
-		if err := c.Run(); err != nil {
-			log.Fatalf("ERROR:%v\n", err)
-		}
+		startClient(config)
 	} else if serverMode {
 		log.Printf("fgtun v%v, FleeGrid as TUN device\n", Version)
 		startServer(config)
@@ -66,4 +61,28 @@ func showHelp() {
 	fmt.Printf("  Client Mode: fgtun -c [FLEE_URL], or use environment variable $FLEE_URL\n")
 	fmt.Printf("Option:\n")
 	flag.PrintDefaults()
+}
+
+func startClient(config *core.Config) {
+	var c *Client
+	var err error
+
+	// create signal chan
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+
+	// create client
+	if c, err = NewClient(config); err != nil {
+		os.Exit(1)
+		return
+	}
+
+	// capture signal to stop
+	go func() {
+		<-signalChan
+		c.Stop()
+	}()
+
+	// start
+	c.Run()
 }
