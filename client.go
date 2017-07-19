@@ -24,6 +24,8 @@ type Client struct {
 
 	stopping bool
 	done     chan bool
+
+	lastGatewayIP string
 }
 
 // NewClient creates a new client with config
@@ -158,7 +160,7 @@ func (c *Client) readLoop() {
 		// log
 		src, _ := p.IP(pkt.SourceIP)
 		dst, _ := p.IP(pkt.DestinationIP)
-		dlogf("tun: IPPacket read: v%v, len: %v, src: %v, dst: %v", p.Version(), len(p), src.String(), dst.String())
+		dlogf("tun: IPPacket read: v%v, len: %v, %v -> %v", p.Version(), len(p), src.String(), dst.String())
 
 		// write
 		if _, err = c.conn.Write(p); err != nil {
@@ -215,6 +217,9 @@ func (c *Client) Stop() {
 		logln("conn: shutting down")
 		c.conn.Close()
 	}
+
+	// shutdown TUN
+	c.shutdownTUN()
 
 	// close tun
 	if c.device != nil {
