@@ -4,8 +4,10 @@ import (
 	"github.com/fleegrid/core"
 	"github.com/fleegrid/nat"
 	"github.com/fleegrid/pkt"
+	"github.com/fleegrid/sh"
 	"github.com/fleegrid/tun"
 	"net"
+	"strings"
 	"syscall"
 )
 
@@ -65,9 +67,9 @@ func (c *Client) Run() (err error) {
 	}
 
 	// read loop
-	go c.readLoop()
+	go c.tunReadLoop()
 	// write loop
-	go c.writeLoop()
+	go c.connReadLoop()
 
 	// wait both loop done
 	<-c.done
@@ -111,7 +113,7 @@ func (c *Client) boot() (err error) {
 	return
 }
 
-func (c *Client) readLoop() {
+func (c *Client) tunReadLoop() {
 	// notify done
 	defer func() {
 		c.done <- true
@@ -172,7 +174,7 @@ func (c *Client) readLoop() {
 	}
 }
 
-func (c *Client) writeLoop() {
+func (c *Client) connReadLoop() {
 	// notify done
 	defer func() {
 		c.done <- true
@@ -226,4 +228,35 @@ func (c *Client) Stop() {
 		logln("tun: shutting down")
 		c.device.Close()
 	}
+}
+
+func (c *Client) setupTUN() (err error) {
+	logln("tun: setting up")
+	var ret string
+	ret, err = sh.Run(clientSetupScript, sh.Params{
+		"DeviceName": c.device.Name(),
+		"LocalIP":    c.localIP.String(),
+		"RemoteIP":   c.net.GatewayIP.String(),
+	})
+	if err == nil {
+		c.lastGatewayIP = strings.TrimSpace(ret)
+		logf("tun: current gateway recorded: [%s]\n", c.lastGatewayIP)
+	} else {
+		logln("tun: failed to setup:", ret)
+	}
+	return
+}
+
+func (c *Client) shutdownTUN() (err error) {
+	logln("tun: shutting down")
+	if len(c.lastGatewayIP) > 0 {
+		var ret string
+		ret, err = sh.Run(clientShutdownScript, sh.Params{
+			"GatewayIP": c.lastGatewayIP,
+		})
+		if err != nil {
+			logln("tun: failed to shutdown:", ret, err)
+		}
+	}
+	return
 }
