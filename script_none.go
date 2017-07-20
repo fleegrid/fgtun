@@ -2,10 +2,10 @@
 
 package main
 
-const clientSetupScript = ""
+const clientSetupScript = ``
 
-const clientShutdownScript = ""
+const clientShutdownScript = ``
 
-const serverSetupScript = ""
+const serverSetupScript = ``
 
-const serverShutdownScript = ""
+const serverShutdownScript = ``

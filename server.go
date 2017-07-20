@@ -4,6 +4,7 @@ import (
 	"github.com/fleegrid/core"
 	"github.com/fleegrid/nat"
 	"github.com/fleegrid/pkt"
+	"github.com/fleegrid/sh"
 	"github.com/fleegrid/tun"
 	"net"
 )
@@ -24,17 +25,25 @@ type Server struct {
 	listener net.Listener
 
 	// running
+	// [NAT IP] -> [Client Virtual LocalIP]
+	clientIPs *nat.IPMap
+
+	// [NAT IP] -> [net.Conn]
+	connMgr *ConnMgr
 
 	// done
-	done chan bool
+	done     chan bool
+	stopping bool
 }
 
 // NewServer create a new server instance
 func NewServer(config *core.Config) (s *Server, err error) {
 	// alloc
 	s = &Server{
-		config: config,
-		done:   make(chan bool, 2),
+		config:    config,
+		clientIPs: nat.NewIPMap(),
+		connMgr:   NewConnMgr(),
+		done:      make(chan bool, 2),
 	}
 
 	// create cipher
@@ -107,7 +116,9 @@ func (s *Server) acceptLoop() {
 		conn, err := s.listener.Accept()
 
 		if err != nil {
-			logln("conn: failed to accept:", err)
+			if !s.stopping {
+				logln("conn: failed to accept:", err)
+			}
 			break
 		}
 
@@ -126,13 +137,96 @@ func (s *Server) tunReadLoop() {
 	defer func() {
 		s.done <- true
 	}()
+
+	buf := make([]byte, 64*1024)
+
+	for {
+		// read buf
+		var l int
+		var err error
+		if l, err = s.tun.Read(buf); err != nil {
+			if !s.stopping {
+				logln("tun: failed to read packet:", err)
+			}
+			break
+		}
+
+		// extract Payload
+		var pl []byte
+		if pl, err = pkt.TUNPacket(buf[:l]).Payload(); err != nil {
+			logln("tun: failed to extract payload:", err)
+			continue
+		}
+
+		// extract IPPacket
+		ipp := pkt.IPPacket(pl)
+
+		// check IP version
+		if ipp.Version() != 4 {
+			logln("tun: only IPv4 is supported")
+			continue
+		}
+
+		// check IPPacket length
+		if il, err := ipp.Length(); il != len(ipp) || err != nil {
+			logln("tun: IPPacket length mismatch", il, "!=", len(ipp), err)
+			continue
+		}
+
+		// extract destination IP
+		dstIP, err := ipp.IP(pkt.DestinationIP)
+		if err != nil {
+			logln("tun: cannot extract destination IP")
+			continue
+		}
+
+		// log
+		srcIP, _ := ipp.IP(pkt.SourceIP)
+		dlogf("tun: IPPacket read: v%v, len: %v, %v -> %v", ipp.Version(), len(ipp), srcIP.String(), dstIP.String())
+
+		// get client localIP
+		clientLocalIP := s.clientIPs.Get(dstIP)
+
+		if clientLocalIP == nil {
+			logln("tun: IPPacket destination IP not found")
+			continue
+		}
+
+		// rewrite DestinationIP to client's virtual localIP
+		if err := ipp.SetIP(pkt.DestinationIP, clientLocalIP); err != nil {
+			logln("tun: IPPacket destination IP failed to set")
+			continue
+		}
+
+		// find client connection
+		conn := s.connMgr.Get(dstIP)
+
+		if conn == nil {
+			logln("conn: cannot find corresponding connection for", dstIP.String())
+			continue
+		}
+
+		// make a local copy and write
+		p := make([]byte, len(ipp), len(ipp))
+		copy(p, ipp)
+
+		go conn.Write(p)
+	}
 }
 
 func (s *Server) setupTUN() (err error) {
+	p := &sh.Params{}
+	if _, err = sh.Run(serverSetupScript, p); err != nil {
+		logln("tun: failed to setup device:", err)
+	}
 	return
 }
 
 func (s *Server) shutdownTUN() (err error) {
+	p := &sh.Params{}
+	if _, err = sh.Run(serverShutdownScript, p); err != nil {
+		logln("tun: failed to shutdown device:", err)
+	}
 	return
 }
 
@@ -219,4 +313,19 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 // Stop stop the server, makes Run() exit
 func (s *Server) Stop() {
+	s.stopping = true
+
+	logln("tun: closing device")
+	s.shutdownTUN()
+	if s.tun != nil {
+		s.tun.Close()
+	}
+
+	logln("conn: closing server")
+	if s.listener != nil {
+		s.listener.Close()
+	}
+
+	<-s.done
+	<-s.done
 }

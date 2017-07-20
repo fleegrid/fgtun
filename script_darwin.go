@@ -16,8 +16,6 @@ route delete default
 
 route add default {{.RemoteIP}}
 
-# Trigger sh.ExtractResult()
-
 echo "------------"
 echo $CURRENT_GATEWAY
 `
@@ -33,6 +31,18 @@ route delete default || true
 route add default {{.GatewayIP}}
 `
 
-const serverSetupScript = ""
+const serverSetupScript = `
+#!/bin/sh
 
-const serverShutdownScript = ""
+echo "Drawin server is not supported"
+
+exit 1
+`
+
+const serverShutdownScript = `
+#!/bin/sh
+
+echo "Drawin server is not supported"
+
+exit 1
+`
