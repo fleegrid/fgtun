@@ -130,7 +130,7 @@ func (s *Server) acceptLoop() {
 			break
 		}
 
-		logf("conn: new connection:", conn.RemoteAddr().String())
+		logln("conn: new connection:", conn.RemoteAddr().String())
 
 		// cipher wrapped connection
 		conn = core.NewStreamConn(conn, s.cipher)
@@ -269,14 +269,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 		ipp, err := pkt.ReadIPPacket(conn)
 		if err != nil {
 			if !s.stop {
-				logf("failed to read a IPPacket: %v: %v\n", name, err)
+				logln("conn:", name, "failed to read a IPPacket:", err)
 			}
 			break
 		}
 
 		// check version
 		if ipp.Version() != 4 {
-			logln("conn: IPPacket v6 is not supported")
+			logln("conn:", name, "IPPacket v6 is not supported")
 			break
 		}
 
@@ -286,14 +286,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 			// take a virtual IP
 			vip, err = s.net.Take()
 			if err != nil {
-				logf("cannot assign IP: %v: %v\n", name, err)
+				logln("conn:", name, "cannot assign IP:", err)
 				break
 			}
 
 			// get orignal IP
 			oip, err = ipp.IP(pkt.SourceIP)
 			if err != nil {
-				logf("cannot retrieve original IP: %v: %v\n", name, err)
+				logln("conn:", name, "cannot retrieve original IP:", name, err)
 				break
 			}
 
@@ -302,30 +302,30 @@ func (s *Server) handleConnection(conn net.Conn) {
 			// record [virtual IP] -> [net.Conn]
 			s.clients.Set(vip, conn)
 
-			logf("virtual IP assigned: %v: %v --> %v\n", name, oip.String(), vip.String())
+			logln("conn:", name, "virtual IP assigned", oip.String(), "->", vip.String())
 
 			// rewrite IP
 			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
-				logf("cannot rewrite source IP: %v: %v\n", name, err)
+				logln("conn:", name, "cannot rewrite source IP:", err)
 				break
 			}
 		} else {
 			// check source IP
 			noip, err := ipp.IP(pkt.SourceIP)
 			if err != nil {
-				logf("cannot retrieve original IP: %v: %v\n", name, err)
+				logln("conn:", name, "cannot retrieve original IP:", err)
 				break
 			}
 			if !noip.Equal(oip) {
-				logf("original IP changed: %v: %v --> %v\n", name, oip.String(), noip.String())
+				logln("conn:", name, "original IP changed:", oip.String(), "->", noip.String())
 				break
 			}
 
 			// rewrite IP
 			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
-				logf("cannot rewrite source IP: %v: %v\n", name, err)
+				logln("conn:", name, "cannot rewrite source IP:", err)
 				break
 			}
 		}
@@ -333,7 +333,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// log
 		src, _ := ipp.IP(pkt.SourceIP)
 		dst, _ := ipp.IP(pkt.DestinationIP)
-		logf("IPPacket read: Version:%v, Length:%v, Source:%v, Destination:%v", ipp.Version(), len(ipp), src.String(), dst.String())
+		dlogf("conn: %s IPPacket read: v%v, len:%v, %v -> %v\n", name, ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// create TUNPacket
 		tp := make(pkt.TUNPacket, len(ipp)+4, len(ipp)+4)
