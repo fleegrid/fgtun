@@ -70,8 +70,6 @@ func NewServer(config *core.Config) (s *Server, err error) {
 
 // Run run the server, method not returns until Stop() called
 func (s *Server) Run() (err error) {
-	s.stop = false
-
 	if err = s.boot(); err != nil {
 		return
 	}
@@ -85,6 +83,12 @@ func (s *Server) Run() (err error) {
 }
 
 func (s *Server) boot() (err error) {
+	s.stop = false
+
+	// print informations
+	logf("core: using cipher %v\n", s.config.Cipher)
+	logf("nat: using subnet %v, %v -> %v\n", s.net.String(), s.localIP.String(), s.net.GatewayIP.String())
+
 	// TUN
 	if s.tun, err = tun.NewDevice(); err != nil {
 		logln("tun: failed to create device:", err)
