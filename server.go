@@ -7,6 +7,7 @@ import (
 	"github.com/fleegrid/sh"
 	"github.com/fleegrid/tun"
 	"net"
+	"syscall"
 )
 
 // DefaultServerSubnet default subnet for server
@@ -29,7 +30,7 @@ type Server struct {
 	clientIPs *nat.IPMap
 
 	// [NAT IP] -> [net.Conn]
-	connMgr *ConnMgr
+	clients *ConnMgr
 
 	// done
 	done     chan bool
@@ -42,7 +43,7 @@ func NewServer(config *core.Config) (s *Server, err error) {
 	s = &Server{
 		config:    config,
 		clientIPs: nat.NewIPMap(),
-		connMgr:   NewConnMgr(),
+		clients:   NewConnMgr(),
 		done:      make(chan bool, 2),
 	}
 
@@ -199,7 +200,7 @@ func (s *Server) tunReadLoop() {
 		}
 
 		// find client connection
-		conn := s.connMgr.Get(dstIP)
+		conn := s.clients.Get(dstIP)
 
 		if conn == nil {
 			logln("conn: cannot find corresponding connection for", dstIP.String())
@@ -209,7 +210,6 @@ func (s *Server) tunReadLoop() {
 		// make a local copy and write
 		p := make([]byte, len(ipp), len(ipp))
 		copy(p, ipp)
-
 		go conn.Write(p)
 	}
 }
@@ -243,44 +243,59 @@ func (s *Server) handleConnection(conn net.Conn) {
 	var vip net.IP
 	// original ip
 	var oip net.IP
-	// subnet
-	var subnet *nat.Net
 
 	// defer to remove virtual IP
 	defer func() {
-		if vip != nil && subnet != nil {
-			subnet.Remove(vip)
+		if vip != nil {
+			// remote conn ref
+			s.clients.Delete(vip)
+			// delete ip connection
+			s.clientIPs.Delete(vip)
+			// release allocated virtual IP
+			s.net.Remove(vip)
 		}
 	}()
 
 	for {
+		// read packet
 		ipp, err := pkt.ReadIPPacket(conn)
 		if err != nil {
-			logf("failed to read a IPPacket: %v: %v\n", name, err)
+			if !s.stopping {
+				logf("failed to read a IPPacket: %v: %v\n", name, err)
+			}
 			break
 		}
+
+		// check version
+		if ipp.Version() != 4 {
+			logln("conn: IPPacket v6 is not supported")
+			break
+		}
+
 		// virtual ip not assigned
 		if vip == nil {
-			// determine subnet
-			if ipp.Version() == 4 {
-				subnet = s.net
-			} else {
-				logf("IPv6 is not supported")
-				continue
+
+			// take a virtual IP
+			vip, err = s.net.Take()
+			if err != nil {
+				logf("cannot assign IP: %v: %v\n", name, err)
+				break
 			}
-			// record orignal IP
+
+			// get orignal IP
 			oip, err = ipp.IP(pkt.SourceIP)
 			if err != nil {
 				logf("cannot retrieve original IP: %v: %v\n", name, err)
 				break
 			}
-			// take a virtual IP
-			vip, err = subnet.Take()
-			if err != nil {
-				logf("cannot assign IP: %v: %v\n", name, err)
-				break
-			}
+
+			// record [virtual IP] -> [client localIP]
+			s.clientIPs.Set(vip, oip)
+			// record [virtual IP] -> [net.Conn]
+			s.clients.Set(vip, conn)
+
 			logf("virtual IP assigned: %v: %v --> %v\n", name, oip.String(), vip.String())
+
 			// rewrite IP
 			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
@@ -298,6 +313,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 				logf("original IP changed: %v: %v --> %v\n", name, oip.String(), noip.String())
 				break
 			}
+
 			// rewrite IP
 			err = ipp.SetIP(pkt.SourceIP, vip)
 			if err != nil {
@@ -305,9 +321,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 				break
 			}
 		}
+
+		// log
 		src, _ := ipp.IP(pkt.SourceIP)
 		dst, _ := ipp.IP(pkt.DestinationIP)
 		logf("IPPacket read: Version:%v, Length:%v, Source:%v, Destination:%v", ipp.Version(), len(ipp), src.String(), dst.String())
+
+		// create TUNPacket
+		tp := make(pkt.TUNPacket, len(ipp)+4, len(ipp)+4)
+		tp.SetProto(syscall.AF_INET)
+		tp.CopyPayload(ipp)
+
+		// write TUNPacket to tun
+		if s.tun != nil {
+			if _, err = s.tun.Write(tp); err != nil && !s.stopping {
+				logln("tun: failed to write:", err)
+			}
+		}
 	}
 }
 
