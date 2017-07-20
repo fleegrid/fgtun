@@ -16,12 +16,12 @@ func logf(s string, a ...interface{}) {
 
 func dlogln(a ...interface{}) {
 	if debugLog {
-		log.Println(a...)
+		log.Println(append([]interface{}{"[DEBUG]"}, a...)...)
 	}
 }
 
 func dlogf(s string, a ...interface{}) {
 	if debugLog {
-		log.Printf(s, a...)
+		log.Printf("[DEBUG] "+s, a...)
 	}
 }

@@ -35,7 +35,6 @@ const serverSetupScript = `
 #!/bin/sh
 
 echo "Drawin server is not supported"
-
 exit 1
 `
 
@@ -43,6 +42,5 @@ const serverShutdownScript = `
 #!/bin/sh
 
 echo "Drawin server is not supported"
-
 exit 1
 `

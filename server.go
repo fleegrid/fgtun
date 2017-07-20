@@ -33,8 +33,8 @@ type Server struct {
 	clients *ConnMgr
 
 	// done
-	done     chan bool
-	stopping bool
+	done chan bool
+	stop bool
 }
 
 // NewServer create a new server instance
@@ -70,6 +70,8 @@ func NewServer(config *core.Config) (s *Server, err error) {
 
 // Run run the server, method not returns until Stop() called
 func (s *Server) Run() (err error) {
+	s.stop = false
+
 	if err = s.boot(); err != nil {
 		return
 	}
@@ -109,6 +111,7 @@ func (s *Server) boot() (err error) {
 func (s *Server) acceptLoop() {
 	// defer to notify done
 	defer func() {
+		dlogln("server: acceptLoop done")
 		s.done <- true
 	}()
 
@@ -117,7 +120,7 @@ func (s *Server) acceptLoop() {
 		conn, err := s.listener.Accept()
 
 		if err != nil {
-			if !s.stopping {
+			if !s.stop {
 				logln("conn: failed to accept:", err)
 			}
 			break
@@ -136,6 +139,7 @@ func (s *Server) acceptLoop() {
 func (s *Server) tunReadLoop() {
 	// defer to notify done
 	defer func() {
+		dlogln("server: tunReadLoop done")
 		s.done <- true
 	}()
 
@@ -146,7 +150,7 @@ func (s *Server) tunReadLoop() {
 		var l int
 		var err error
 		if l, err = s.tun.Read(buf); err != nil {
-			if !s.stopping {
+			if !s.stop {
 				logln("tun: failed to read packet:", err)
 			}
 			break
@@ -260,7 +264,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// read packet
 		ipp, err := pkt.ReadIPPacket(conn)
 		if err != nil {
-			if !s.stopping {
+			if !s.stop {
 				logf("failed to read a IPPacket: %v: %v\n", name, err)
 			}
 			break
@@ -334,7 +338,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		// write TUNPacket to tun
 		if s.tun != nil {
-			if _, err = s.tun.Write(tp); err != nil && !s.stopping {
+			if _, err = s.tun.Write(tp); err != nil && !s.stop {
 				logln("tun: failed to write:", err)
 			}
 		}
@@ -343,7 +347,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 // Stop stop the server, makes Run() exit
 func (s *Server) Stop() {
-	s.stopping = true
+	s.stop = true
 
 	logln("tun: closing device")
 	s.shutdownTUN()

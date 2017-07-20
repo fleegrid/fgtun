@@ -23,8 +23,8 @@ type Client struct {
 	device *tun.Device
 	conn   net.Conn
 
-	stopping bool
-	done     chan bool
+	stop bool
+	done chan bool
 
 	lastGateway string
 }
@@ -78,8 +78,8 @@ func (c *Client) Run() (err error) {
 }
 
 func (c *Client) boot() (err error) {
-	// clear stopping
-	c.stopping = false
+	// clear stop
+	c.stop = false
 
 	// print informations
 	logf("core: using cipher %v\n", c.config.Cipher)
@@ -115,6 +115,7 @@ func (c *Client) boot() (err error) {
 func (c *Client) tunReadLoop() {
 	// notify done
 	defer func() {
+		dlogln("client tunReadLoop done")
 		c.done <- true
 	}()
 
@@ -128,7 +129,7 @@ func (c *Client) tunReadLoop() {
 		// read to buffer
 		var l int
 		if l, err = c.device.Read(buf); err != nil {
-			if !c.stopping {
+			if !c.stop {
 				logln("tun: failed to read bytes from TUN device:", err)
 			}
 			break
@@ -165,7 +166,7 @@ func (c *Client) tunReadLoop() {
 
 		// write
 		if _, err = c.conn.Write(p); err != nil {
-			if !c.stopping {
+			if !c.stop {
 				logln("conn: failed to send IPPacket to server:", err)
 			}
 			break
@@ -176,6 +177,7 @@ func (c *Client) tunReadLoop() {
 func (c *Client) connReadLoop() {
 	// notify done
 	defer func() {
+		dlogln("client connReadLoop done")
 		c.done <- true
 	}()
 
@@ -185,7 +187,7 @@ func (c *Client) connReadLoop() {
 		// read a IPPacket from server
 		var p pkt.IPPacket
 		if p, err = pkt.ReadIPPacket(c.conn); err != nil {
-			if !c.stopping {
+			if !c.stop {
 				logln("conn: failed to read a IPPacket:", err)
 			}
 			break
@@ -200,7 +202,7 @@ func (c *Client) connReadLoop() {
 		tp.CopyPayload(p)
 		// write a IPPacket once a time
 		if _, err = c.device.Write(tp); err != nil {
-			if !c.stopping {
+			if !c.stop {
 				logln("conn: failed to write a IPPacket to TUN device:", err)
 			}
 			break
@@ -210,8 +212,8 @@ func (c *Client) connReadLoop() {
 
 // Stop shutdown the client, makes Run() returns with nil error
 func (c *Client) Stop() {
-	// mark stopping
-	c.stopping = true
+	// mark stop
+	c.stop = true
 
 	// close conn
 	if c.conn != nil {
