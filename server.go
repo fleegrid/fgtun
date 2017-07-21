@@ -298,7 +298,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		// log
 		src, _ := ipp.IP(pkt.SourceIP)
 		dst, _ := ipp.IP(pkt.DestinationIP)
-		dlogf("conn: >> [v%v|%v], [%v -> %v]\n", name, ipp.Version(), len(ipp), src.String(), dst.String())
+		dlogf("conn: %v >> [v%v|%v], [%v -> %v]\n", name, ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// virtual ip not assigned
 		if vip == nil {
