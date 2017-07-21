@@ -191,7 +191,8 @@ func (s *Server) tunReadLoop() {
 
 		// log
 		srcIP, _ := ipp.IP(pkt.SourceIP)
-		dlogf("tun: IPPacket read: v%v, len: %v, %v -> %v", ipp.Version(), len(ipp), srcIP.String(), dstIP.String())
+		dstIP, _ = ipp.IP(pkt.DestinationIP)
+		dlogf("tun: >> [v%v|%v], [%v -> %v]", ipp.Version(), len(ipp), srcIP.String(), dstIP.String())
 
 		// get client localIP
 		clientLocalIP := s.clientIPs.Get(dstIP)
@@ -214,6 +215,10 @@ func (s *Server) tunReadLoop() {
 			logln("conn: cannot find corresponding connection for", dstIP.String())
 			continue
 		}
+
+		srcIP, _ = ipp.IP(pkt.SourceIP)
+		dstIP, _ = ipp.IP(pkt.DestinationIP)
+		dlogf("conn: %v << [v%v|%v], [%v -> %v]", conn.RemoteAddr().String(), ipp.Version(), len(ipp), srcIP.String(), dstIP.String())
 
 		// make a local copy and write
 		p := make([]byte, len(ipp), len(ipp))
@@ -290,6 +295,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 			break
 		}
 
+		// log
+		src, _ := ipp.IP(pkt.SourceIP)
+		dst, _ := ipp.IP(pkt.DestinationIP)
+		dlogf("conn: >> [v%v|%v], [%v -> %v]\n", name, ipp.Version(), len(ipp), src.String(), dst.String())
+
 		// virtual ip not assigned
 		if vip == nil {
 
@@ -341,9 +351,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 
 		// log
-		src, _ := ipp.IP(pkt.SourceIP)
-		dst, _ := ipp.IP(pkt.DestinationIP)
-		dlogf("conn: %s IPPacket read: v%v, len:%v, %v -> %v\n", name, ipp.Version(), len(ipp), src.String(), dst.String())
+		src, _ = ipp.IP(pkt.SourceIP)
+		dst, _ = ipp.IP(pkt.DestinationIP)
+		dlogf("tun: << [v%v|%v], [%v -> %v]\n", ipp.Version(), len(ipp), src.String(), dst.String())
 
 		// create TUNPacket
 		tp := make(pkt.TUNPacket, len(ipp)+4, len(ipp)+4)
