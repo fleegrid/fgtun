@@ -8,7 +8,7 @@ const clientSetupScript = `
 set -e
 set -u
 
-ifconfig {{.DeviceName}} {{.LocalIP}} {{.RemoteIP}} mtu 1500 up
+ifconfig {{.DeviceName}} {{.LocalIP}} {{.RemoteIP}} mtu {{.MTU}} netmask {{.Netmask}} up
 
 CURRENT_GATEWAY=$(route -n get default | grep gateway | cut -d ':' -f 2)
 

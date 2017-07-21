@@ -223,7 +223,14 @@ func (s *Server) tunReadLoop() {
 }
 
 func (s *Server) setupTUN() (err error) {
-	p := &sh.Params{}
+	p := &sh.Params{
+		"DeviceName": s.tun.Name(),
+		"LocalIP":    s.localIP.String(),
+		"RemoteIP":   s.net.GatewayIP.String(),
+		"Netmask":    "255.255.255.0",
+		"MTU":        "1500",
+		"CIDR":       s.net.IP.String() + "/24",
+	}
 	if _, err = sh.Run(serverSetupScript, p); err != nil {
 		logln("tun: failed to setup device:", err)
 	}
@@ -231,7 +238,10 @@ func (s *Server) setupTUN() (err error) {
 }
 
 func (s *Server) shutdownTUN() (err error) {
-	p := &sh.Params{}
+	p := &sh.Params{
+		"DeviceName": s.tun.Name(),
+		"CIDR":       DefaultServerSubnet + "/24",
+	}
 	if _, err = sh.Run(serverShutdownScript, p); err != nil {
 		logln("tun: failed to shutdown device:", err)
 	}
@@ -363,7 +373,4 @@ func (s *Server) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
-
-	<-s.done
-	<-s.done
 }

@@ -5,22 +5,46 @@ package main
 const clientSetupScript = `
 #!/bin/sh
 
-echo "Linux client is not supported"
-exit 1
+set -e
+set -u
+
+ifconfig {{.DeviceName}} {{.LocalIP}} pointopoint {{.RemoteIP}} mtu {{.MTU}} netmask {{.Netmask}} up
+
+CURRENT_GATEWAY=$(/sbin/ip route | awk '/default/ { print $3 }')
+
+route delete default
+
+route add default gw {{.RemoteIP}}
+
+echo "------------"
+echo $CURRENT_GATEWAY
 `
 
 const clientShutdownScript = `
 #!/bin/sh
 
-echo "Linux client is not supported"
-exit 1
+route delete default || true
+
+route add default gw {{.GatewayIP}}
 `
 
 const serverSetupScript = `
 #!/bin/sh
 
+set -e
+set -u
+
+ifconfig {{.DeviceName}} {{.LocalIP}} pointopoint {{.RemoteIP}} mtu {{.MTU}} netmask {{.Netmask}} up
+
+route add -net {{.CIDR}} gw {{.RemoteIP}}
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
 `
+
 const serverShutdownScript = `
 #!/bin/sh
 
+ifconfig {{.DeviceName}} down
+
+route delete {{.CIDR}}
 `

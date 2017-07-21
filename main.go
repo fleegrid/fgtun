@@ -66,6 +66,7 @@ func showHelp() {
 func startClient(config *core.Config) {
 	var c *Client
 	var err error
+	var stopping bool
 
 	// create signal chan
 	signalChan := make(chan os.Signal, 1)
@@ -79,8 +80,14 @@ func startClient(config *core.Config) {
 
 	// capture signal to stop
 	go func() {
-		<-signalChan
-		c.Stop()
+		for {
+			<-signalChan
+			if stopping {
+				os.Exit(1)
+			}
+			stopping = true
+			c.Stop()
+		}
 	}()
 
 	// start
@@ -90,6 +97,7 @@ func startClient(config *core.Config) {
 func startServer(config *core.Config) {
 	var s *Server
 	var err error
+	var stopping bool
 
 	// create signal chan
 	signalChan := make(chan os.Signal, 1)
@@ -103,8 +111,14 @@ func startServer(config *core.Config) {
 
 	// capture signal to stop
 	go func() {
-		<-signalChan
-		s.Stop()
+		for {
+			<-signalChan
+			if stopping {
+				os.Exit(1)
+			}
+			stopping = true
+			s.Stop()
+		}
 	}()
 
 	// start

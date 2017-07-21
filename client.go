@@ -238,6 +238,8 @@ func (c *Client) setupTUN() (err error) {
 		"DeviceName": c.device.Name(),
 		"LocalIP":    c.localIP.String(),
 		"RemoteIP":   c.net.GatewayIP.String(),
+		"Netmask":    "255.255.255.0",
+		"MTU":        "1500",
 	})
 	if err == nil {
 		c.lastGateway = sh.ExtractResult(ret)
