@@ -38,6 +38,8 @@ ifconfig {{.DeviceName}} {{.LocalIP}} pointopoint {{.RemoteIP}} mtu {{.MTU}} net
 
 route add -net {{.CIDR}} gw {{.RemoteIP}}
 
+iptables -t nat -A POSTROUTING -o {{.DeviceName}} -j MASQUERADE
+
 echo 1 > /proc/sys/net/ipv4/ip_forward
 `
 
